@@ -35,7 +35,7 @@ function removeDuplicates(data) {
 }
 
 const endPoint =
-  "https://script.google.com/macros/s/AKfycbzbI77LjyY_XlFjR-8Zll-gpJ9IAwCY4ukkBeSUh74SOee_fG5yOLM5IpsnfHZob8W7/exec";
+  "https://script.google.com/macros/s/AKfycbxDTKoWW2joDpaK075TH2yUY6FFvVIWByjsj_Yqfvfwai-n-B6IUfaWnaO5T_ImefId/exec";
 
 export default function FilteredTable() {
   const [{ data: dataTypes, loading: typeLoading, error: TypeError }] =
