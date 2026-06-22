@@ -15,24 +15,11 @@ import { useLocation } from "react-router-dom";
 
 dayjs.extend(isBetween);
 
-const people = [
-  {
-    name: "Lindsay Walton",
-    title: "Front-end Developer",
-    email: "lindsay.walton@example.com",
-    role: "Member",
-  },
-  // More people...
-];
-
-const endPoint =
-  "https://script.google.com/macros/s/AKfycbzbI77LjyY_XlFjR-8Zll-gpJ9IAwCY4ukkBeSUh74SOee_fG5yOLM5IpsnfHZob8W7/exec";
-
 const isWithinRange = (fixedDate, startDate, endDate) => {
   const start = dayjs(startDate).startOf("day");
-  const end = dayjs(endDate).add(1, "day").startOf("day"); // Añade un día y ajusta al inicio del día
+  const end = dayjs(endDate).add(1, "day").startOf("day");
   const dateToCheck = dayjs(fixedDate).startOf("day");
-  return dateToCheck.isBetween(start, end, null, "[)"); // Nota el cambio a "[)" para incluir el inicio pero no el final
+  return dateToCheck.isBetween(start, end, null, "[)");
 };
 
 function removeDuplicates(data) {
@@ -47,18 +34,16 @@ function removeDuplicates(data) {
   }, []);
 }
 
+const endPoint =
+  "https://script.google.com/macros/s/AKfycbzbI77LjyY_XlFjR-8Zll-gpJ9IAwCY4ukkBeSUh74SOee_fG5yOLM5IpsnfHZob8W7/exec";
+
 export default function FilteredTable() {
   const [{ data: dataTypes, loading: typeLoading, error: TypeError }] =
     useAxios(endPoint + "?route=getIncidentTypes");
   const [{ data, loading, error }] = useAxios(endPoint + "?route=getIncidents");
   const [filteredData, setFilteredData] = useState([]);
   const [LocationChanged, setLocationChanged] = useState(false);
-
-  const [filters, setFilters] = useState({
-    "Driver Name": "",
-    Terminal: "",
-    Type: "",
-  });
+  const [showTermed, setShowTermed] = useState(false);
 
   const [newfilters, setnewFilters] = useState({
     "Driver Name": [],
@@ -74,7 +59,6 @@ export default function FilteredTable() {
       return setnewFilters((prev) => ({ ...prev, [selector]: e }));
     const { name } = e;
     console.log(name, selector)
-    setFilters((prev) => ({ ...prev, [selector]: name.trim() }));
     setnewFilters((prev) => {
       const existingValues = prev[selector];
       if (!existingValues.includes(name.trim())) {
@@ -174,12 +158,27 @@ export default function FilteredTable() {
   };
 
   useEffect(() => {
-    if (data) {
+    if (data && dataTypes && dataTypes.drivers && dataTypes.drivers.length > 0) {
+      // Apply the show termed drivers filter on initial load
+      if (!showTermed) {
+        const normalizeName = (value) =>
+          (value || "").replace(/\s+/g, " ").trim().toLowerCase();
+        const activeDriverNames = new Set(
+          dataTypes.drivers.map((driver) => normalizeName(driver[0]))
+        );
+        const isTermedRecord = (record) =>
+          !activeDriverNames.has(normalizeName(record["Driver Name"]));
+        const filtered = data.filter((record) => !isTermedRecord(record));
+        setFilteredData(filtered);
+      } else {
+        setFilteredData(data);
+      }
+    } else if (data) {
       setFilteredData(data);
     }
-  }, [data]);
+  }, [data, dataTypes, showTermed]);
 
-  if (loading || typeLoading) return <Spinner />;
+  if (loading || typeLoading || !dataTypes || !dataTypes.drivers || !dataTypes.types) return <Spinner />;
 
   let drivers = dataTypes.drivers.map((driver, i) => ({
     id: i,
@@ -198,6 +197,21 @@ export default function FilteredTable() {
 
   let allHomeTerminal = removeDuplicates(homeTerminal);
 
+  // The dropdown driver list already excludes termed drivers, so any coaching
+  // record whose driver is NOT in this active set belongs to a termed/inactive driver.
+  const normalizeName = (value) =>
+    (value || "").replace(/\s+/g, " ").trim().toLowerCase();
+  const activeDriverNames = new Set(
+    dataTypes.drivers.map((driver) => normalizeName(driver[0]))
+  );
+  const isTermedRecord = (record) =>
+    !activeDriverNames.has(normalizeName(record["Driver Name"]));
+
+  // When the toggle is OFF, drop termed records; when ON, show everything.
+  const visibleData = showTermed
+    ? filteredData
+    : filteredData.filter((record) => !isTermedRecord(record));
+
 
   return (
     <div className="px-4 sm:px-6 lg:px-8">
@@ -207,14 +221,14 @@ export default function FilteredTable() {
             <ComboBox
               title="By Drivers"
               items={drivers}
-              selectedPerson={filters["Driver Name"]?.name || ""}
+              selectedPerson=""
               setSelectedPerson={(e) => handleFilterChange(e, "Driver Name")}
             />
 
             <ComboBox
               title="By Terminal"
               items={allHomeTerminal}
-              selectedPerson={filters["Terminal"]?.name || ""}
+              selectedPerson=""
               setSelectedPerson={(e) => handleFilterChange(e, "Terminal")}
             />
 
@@ -224,14 +238,14 @@ export default function FilteredTable() {
                 ...typeone,
                 items: typeone.items.map((item) => ({ id: item, name: item })),
               }))}
-              selectedPerson={filters["Type"]?.name || ""}
+              selectedPerson=""
               setSelectedPerson={(e) => handleFilterChange(e, "Type")}
             />
 
             <ComboBox
               title="By Status"
               items={driversStatus}
-              selectedPerson={filters["status"]?.name || ""}
+              selectedPerson=""
               setSelectedPerson={(e) => handleFilterChange(e, "status")}
             />
 
@@ -286,6 +300,26 @@ export default function FilteredTable() {
             Clear
           </button>
         </div>
+        <div className="mt-4 flex items-center sm:ml-6">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showTermed}
+            onClick={() => setShowTermed((value) => !value)}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+              showTermed ? "bg-[#125e4d]" : "bg-gray-300"
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                showTermed ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+          <span className="ml-3 text-sm font-medium text-gray-900">
+            Show termed drivers
+          </span>
+        </div>
       </div>
 
       <div className="my-4 flex justify-between px-2 gap-2">
@@ -327,7 +361,7 @@ export default function FilteredTable() {
               />
             ))}
         </div>
-        <p className="w-fit">Total: {filteredData.length}</p>
+        <p className="w-fit">Total: {visibleData.length}</p>
       </div>
       <div className="mt-8 flow-root">
         <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
@@ -358,7 +392,7 @@ export default function FilteredTable() {
                     <th
                       scope="col"
                       className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 max-w-[200px] truncate"
-                      title="Incident" // Tooltip
+                      title="Incident"
                     >
                       Incident
                     </th>
@@ -413,7 +447,7 @@ export default function FilteredTable() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
-                  {filteredData.map((person) => (
+                  {visibleData.map((person) => (
                     <tr key={uuidv4()}>
                       <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6 max-w-[200px] ">
                         {person["Driver Name"]}
